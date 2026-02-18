@@ -3,726 +3,822 @@
 # ----------------------------------------------------------------------
 
 import streamlit as st
-from scipy.interpolate import interp1d
-import scipy.optimize as spopt
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from PIL import Image
+from animate_altimetry_waveform import animate_altimetry_waveform_2d, animate_altimetry_waveform_3d
 
 # ----------------------------------------------------------------------
-# Plotting function
+# Page config
 # ----------------------------------------------------------------------
 
+st.set_page_config(
+    page_title="Satellite Radar Altimetry Visualiser",
+    page_icon="🛰️",
+    layout="wide",
+)
 
-def altimetry_plot(
-    topography,
-    range_window,
-    NUM_RAYS,
-    ANIMATION_LENGTH,
-    FPS,
-    PULSE_EFFECT_DURATION,
-    NOISE_PEAK,
-    RAY_ANGLE_DROPOFF_MIN,
-    SAT_ALTITUDE=4,
-    SIMULATED_NUM_RAYS=64,
-    NUM_WF_SAMPLES=128,
-    ADDED_END_TIME=0.5,
-    PLOT_HEIGHT=1000,
-):
+# ----------------------------------------------------------------------
+# CSS
+# NOTE: Button colours are controlled by primaryColor in
+# .streamlit/config.toml. The rules here cover layout, sidebar chrome,
+# expanders, dropdowns, and the Plotly animation buttons only.
+# ----------------------------------------------------------------------
+
+st.markdown(
     """
-    Generate an animated plot visualizing altimetry data.
+    <style>
+        /* ── Global ── */
+        [data-testid="stHeader"]            { display: none !important; }
+        hr                                  { margin: 0.75rem 0 !important; }
+        html, body,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stApp"]               { background-color: white !important; color: black !important; }
 
-    Args:
-        topography (numpy.ndarray): An array representing topography data.
-        range_window (tuple): A tuple containing the range window (start, end).
-        NUM_RAYS (int): Number of rays to simulate and animate.
-        ANIMATION_LENGTH (float): Duration of the animation in seconds.
-        FPS (int): Frames per second for the animation.
-        PULSE_EFFECT_DURATION (float): Duration of the pulse effect in seconds.
-        NOISE_PEAK (float): Peak value for added noise.
-        RAY_ANGLE_DROPOFF_MIN (float): Minimum angle drop-off for rays.
-        SAT_ALTITUDE (float, optional): Altitude of the satellite. Defaults to 4.
-        SIMULATED_NUM_RAYS (int, optional): Number of simulated rays. Defaults to 64.
-        NUM_WF_SAMPLES (int, optional): Number of waveform samples. Defaults to 128.
-        ADDED_END_TIME (float, optional): Additional time at the end of the animation in seconds.
-            Defaults to 0.5.
-        PLOT_HEIGHT (int, optional): Height of the resulting plot. Defaults to 1000.
+        /* ── Sidebar ── */
+        [data-testid="stSidebar"]           { min-width: 250px !important; max-width: 250px !important;
+                                              width: 250px !important; background-color: #f0f4f8 !important; }
+        [data-testid="stSidebarContent"]    { padding: 1rem 0.85rem !important; }
+        [data-testid="stSidebar"],
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] div,
+        [data-testid="stSidebar"] a,
+        [data-testid="stSidebar"] li,
+        [data-testid="stSidebar"] label     { color: #1a1a1a !important; }
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3        { color: #1a3a5c !important; font-size: 0.95rem !important;
+                                              text-transform: uppercase; letter-spacing: 0.06em;
+                                              margin-top: 1.2rem !important; margin-bottom: 0.2rem !important; }
+        [data-testid="stSidebar"] hr        { border-color: #c8d6e5 !important; }
+        [data-testid="stSidebar"] [data-testid="stAlert"],
+        [data-testid="stSidebar"] [data-baseweb="notification"] {
+                                              background-color: white !important;
+                                              border: 1px solid #dde6ef !important;
+                                              border-radius: 8px !important; color: #222 !important; }
+        [data-testid="stSidebar"] [data-testid="stAlert"] p,
+        [data-testid="stSidebar"] [data-baseweb="notification"] p
+                                            { color: #222 !important; font-size: 0.88rem !important; }
+        [data-testid="stSidebar"] img       { display: block; margin: 0.5rem auto 0.25rem; max-width: 80% !important; }
+        [data-testid="stSidebar"] p img     { display: inline !important; margin: 0 !important; max-width: unset !important; }
 
-    Returns:
-        plotly.graph_objs._figure.Figure: A Plotly figure representing the animated plot.
+        /* ── Expanders ── */
+        [data-testid="stExpander"]          { border: 1px solid #dde6ef !important; border-radius: 6px !important; }
+        [data-testid="stExpander"] summary  { background-color: #f0f4f8 !important; border-radius: 6px !important; }
+        [data-testid="stExpander"] summary p,
+        [data-testid="stExpander"] summary span,
+        [data-testid="stExpander"] summary svg
+                                            { color: #1a3a5c !important; fill: #1a3a5c !important; }
+        [data-testid="stExpander"] > div    { background-color: #fafbfc !important; }
 
-    Note:
-        This function generates an animated plot to visualize altimetry data. It simulates
-        rays originating from a satellite, calculates points of closest approach (POCA),
-        generates waveforms, adds noise, and animates the results. The resulting figure
-        can be displayed or saved for further analysis.
-    """
+        /* ── Widget labels ── */
+        label,
+        [data-testid="stWidgetLabel"],
+        [data-testid="stWidgetLabel"] p,
+        .stSlider p, .stCheckbox p,
+        .stMarkdown p                       { color: black !important; }
 
-    # ----------------------------------------------------------------------
-    # Intake topography, normalise, and generate spline fit
-    # ----------------------------------------------------------------------
+        /* ── Dropdowns ── */
+        .stSelectbox [data-baseweb="select"] input
+                                            { cursor: pointer !important; caret-color: transparent !important; }
+        .stSelectbox [data-baseweb="select"],
+        .stSelectbox [data-baseweb="select"] *
+                                            { cursor: pointer !important; }
+        .stSelectbox div[data-baseweb="select"],
+        .stSelectbox div[data-baseweb="select"] *,
+        [data-baseweb="popover"] *,
+        [data-baseweb="menu"] *             { color: black !important; background-color: white !important; }
 
-    topography = topography / np.max(topography)
-    NUM_TOPOGRAPHY_POINTS = len(topography)
-    topography_x = np.linspace(-1, 1, NUM_TOPOGRAPHY_POINTS)
-    spline = interp1d(
-        topography_x, topography, fill_value="extrapolate", kind="slinear"
+        /* ── Text input ── */
+        .stTextInput input                  { color: #111111 !important; background-color: #ffffff !important; }
+
+        /* ── Plotly Play/Pause buttons — matching primaryColor ── */
+        .updatemenu-item-rect               { fill: #4a7fb5 !important; stroke: #4a7fb5 !important; stroke-width: 0 !important; }
+        .updatemenu-item-text               { fill: #ffffff !important; font-weight: 700 !important;
+                                              font-size: 12px !important; letter-spacing: 0.05em !important; }
+        .updatemenu-item-rect:hover         { fill: #3a6a99 !important; stroke: #3a6a99 !important; }
+        g.updatemenu rect.bg                { fill: transparent !important; stroke: none !important; }
+
+        /* ── Alert text ── */
+        [data-testid="stAlert"] p,
+        div[data-testid="stAlert"]          { color: #4a3800 !important; }
+
+        /* ── Parameters heading ── */
+        .params-heading                     { font-size: 2.1rem !important; font-weight: 700 !important;
+                                              margin: 2rem 0 0.9rem 0 !important; color: #111111 !important;
+                                              display: block !important; }
+
+        /* ── Intro callout box ── */
+        .callout-box                        { background-color: #f0f4f8; border-left: 4px solid #1a3a5c;
+                                              padding: 0.85rem 1.1rem; border-radius: 0 6px 6px 0;
+                                              margin: 0.75rem 0 1rem 0; color: #1a1a1a;
+                                              font-size: 0.97rem; line-height: 1.6; }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ----------------------------------------------------------------------
+# Noise helpers — two-layer: rolling (low-freq) + gentle peaky (mid-freq)
+# ----------------------------------------------------------------------
+
+def _noise_1d(n, rng, roll_amp=0.05, peak_amp=0.012):
+    x = np.linspace(0, 2 * np.pi, n)
+    rolling = roll_amp * np.sin(float(rng.uniform(0.5, 1.5)) * x + float(rng.uniform(0, 2 * np.pi)))
+    peaky   = peak_amp * np.sin(float(rng.uniform(2.5, 5.0)) * x + float(rng.uniform(0, 2 * np.pi)))
+    return rolling + peaky
+
+def _noise_2d(shape, rng, roll_amp=0.05, peak_amp=0.012):
+    ny, nx = shape
+    xx, yy = np.meshgrid(np.linspace(0, 2 * np.pi, nx), np.linspace(0, 2 * np.pi, ny))
+    rolling = roll_amp * (
+        np.sin(float(rng.uniform(0.5, 1.5)) * xx + float(rng.uniform(0, 2 * np.pi))) +
+        np.sin(float(rng.uniform(0.5, 1.5)) * yy + float(rng.uniform(0, 2 * np.pi)))
+    ) / 2
+    peaky = peak_amp * (
+        np.sin(float(rng.uniform(2.5, 5.0)) * xx + float(rng.uniform(0, 2 * np.pi))) +
+        np.sin(float(rng.uniform(2.5, 5.0)) * yy + float(rng.uniform(0, 2 * np.pi)))
+    ) / 2
+    return rolling + peaky
+
+# ----------------------------------------------------------------------
+# 2D preset generators
+# ----------------------------------------------------------------------
+
+def _gen_flat_2d():
+    rng = np.random.default_rng()
+    n   = int(rng.integers(14, 20))
+    return np.full(n, float(rng.uniform(0.1, 0.9))) + _noise_1d(n, rng, roll_amp=0.018, peak_amp=0.005)
+
+def _gen_sloped_2d():
+    rng    = np.random.default_rng()
+    n      = int(rng.integers(12, 18))
+    slope  = float(rng.uniform(0.35, 0.65)) * float(rng.choice([-1, 1]))
+    center = float(rng.uniform(0.35, 0.65))
+    return center + slope * (np.linspace(0, 1, n) - 0.5) + _noise_1d(n, rng, roll_amp=0.04, peak_amp=0.010)
+
+def _gen_peaked_2d():
+    rng    = np.random.default_rng()
+    n      = int(rng.integers(14, 20))
+    pos    = float(rng.uniform(0.2, 0.8))
+    peak_h = float(rng.uniform(0.55, 0.85))
+    base   = float(rng.uniform(0.08, 0.32))
+    width  = float(rng.uniform(0.10, 0.38))
+    x      = np.linspace(0, 1, n)
+    return base + (peak_h - base) * np.exp(-0.5 * ((x - pos) / width) ** 2) + _noise_1d(n, rng, roll_amp=0.04, peak_amp=0.012)
+
+def _gen_valley_2d():
+    rng      = np.random.default_rng()
+    n        = int(rng.integers(14, 20))
+    pos      = float(rng.uniform(0.2, 0.8))
+    valley_h = float(rng.uniform(0.08, 0.32))
+    top      = float(rng.uniform(0.60, 0.88))
+    width    = float(rng.uniform(0.10, 0.38))
+    x        = np.linspace(0, 1, n)
+    return top - (top - valley_h) * np.exp(-0.5 * ((x - pos) / width) ** 2) + _noise_1d(n, rng, roll_amp=0.04, peak_amp=0.010)
+
+def _gen_rough_2d():
+    rng   = np.random.default_rng()
+    n     = int(rng.integers(16, 22))
+    amp   = float(rng.uniform(0.15, 0.38))
+    x     = np.linspace(0, 2 * np.pi * int(rng.integers(2, 5)), n)
+    vals  = 0.5 + amp * np.sin(float(rng.uniform(0.6, 1.5)) * x + float(rng.uniform(0, 2 * np.pi)))
+    vals += rng.normal(0, 0.03, n)
+    return vals + _noise_1d(n, rng, roll_amp=0.04, peak_amp=0.015)
+
+PRESET_2D_GENERATORS = {
+    "Flat":   _gen_flat_2d,
+    "Sloped": _gen_sloped_2d,
+    "Peaked": _gen_peaked_2d,
+    "Valley": _gen_valley_2d,
+    "Rough":  _gen_rough_2d,
+}
+
+# ----------------------------------------------------------------------
+# 3D preset generators
+# ----------------------------------------------------------------------
+
+def _gen_flat_3d():
+    rng = np.random.default_rng()
+    n   = 16
+    return np.full((n, n), float(rng.uniform(0.1, 0.9))) + _noise_2d((n, n), rng, roll_amp=0.018, peak_amp=0.005)
+
+def _gen_sloped_3d():
+    rng    = np.random.default_rng()
+    n      = 14
+    slope  = float(rng.uniform(0.35, 0.65)) * float(rng.choice([-1, 1]))
+    center = float(rng.uniform(0.35, 0.65))
+    row    = center + slope * (np.linspace(0, 1, n) - 0.5)
+    return np.tile(row, (n, 1)) + _noise_2d((n, n), rng, roll_amp=0.04, peak_amp=0.010)
+
+def _gen_peaked_3d():
+    rng    = np.random.default_rng()
+    n      = 16
+    x      = np.linspace(-1, 1, n)
+    xx, yy = np.meshgrid(x, x)
+    px, py = float(rng.uniform(-0.4, 0.4)), float(rng.uniform(-0.4, 0.4))
+    peak_h = float(rng.uniform(0.55, 0.85))
+    base   = float(rng.uniform(0.08, 0.28))
+    width  = float(rng.uniform(0.3, 0.8))
+    vals   = base + (peak_h - base) * np.exp(-((xx - px) ** 2 + (yy - py) ** 2) / (2 * width ** 2))
+    return vals + _noise_2d((n, n), rng, roll_amp=0.04, peak_amp=0.012)
+
+def _gen_valley_3d():
+    rng      = np.random.default_rng()
+    n        = 16
+    x        = np.linspace(-1, 1, n)
+    xx, yy   = np.meshgrid(x, x)
+    vx, vy   = float(rng.uniform(-0.4, 0.4)), float(rng.uniform(-0.4, 0.4))
+    valley_h = float(rng.uniform(0.08, 0.28))
+    top      = float(rng.uniform(0.60, 0.88))
+    width    = float(rng.uniform(0.3, 0.8))
+    vals     = top - (top - valley_h) * np.exp(-((xx - vx) ** 2 + (yy - vy) ** 2) / (2 * width ** 2))
+    return vals + _noise_2d((n, n), rng, roll_amp=0.04, peak_amp=0.010)
+
+def _gen_sinusoidal_3d(n=14):
+    """Shared sinusoidal terrain base used by both Rough and Randomise modes."""
+    rng    = np.random.default_rng()
+    x      = np.linspace(0, 2 * np.pi, n)
+    xx, yy = np.meshgrid(x, x)
+    z      = np.zeros((n, n))
+    for _ in range(int(rng.integers(2, 5))):
+        z += np.sin(int(rng.integers(1, 4)) * xx + int(rng.integers(1, 4)) * yy + float(rng.uniform(0, 2 * np.pi)))
+    z -= z.min()
+    return z / z.max() if z.max() > 0 else np.full_like(z, 0.5)
+
+def _gen_rough_3d():
+    rng = np.random.default_rng()
+    z   = _gen_sinusoidal_3d(n=14)
+    z   = 0.1 + 0.8 * z + rng.normal(0, 0.15, z.shape)
+    z  -= z.min()
+    z   = 0.1 + 0.8 * z / z.max() if z.max() > 0 else np.full_like(z, 0.5)
+    return z + _noise_2d(z.shape, rng, roll_amp=0.03, peak_amp=0.012)
+
+def _apply_roughness(base, roughness):
+    return np.clip(0.5 + (base - 0.5) * roughness, 0.0, 1.0)
+
+PRESET_3D_GENERATORS = {
+    "Flat":   _gen_flat_3d,
+    "Sloped": _gen_sloped_3d,
+    "Peaked": _gen_peaked_3d,
+    "Valley": _gen_valley_3d,
+    "Rough":  _gen_rough_3d,
+}
+# Full options list including special modes (no generator function)
+PRESET_3D_OPTIONS = list(PRESET_3D_GENERATORS.keys()) + ["Randomise", "Use 2D profile"]
+
+# ----------------------------------------------------------------------
+# Session state defaults
+# ----------------------------------------------------------------------
+
+_DEFAULTS = {
+    "srw_2d": True,  "rw_2d": (0.0, 1.0), "sray_2d": True,
+    "nr_2d":  25,    "sp_2d": True,        "wn_2d":   0.01,
+    "srw_3d": True,  "rw_3d": (0.0, 1.0), "sray_3d": True,
+    "nr_3d":  50,    "sp_3d": True,        "wn_3d":   0.01,
+    "roughness_3d":   0.5,
+    "last_preset_2d": None,
+    "last_preset_3d": None,
+}
+for _k, _v in _DEFAULTS.items():
+    st.session_state.setdefault(_k, _v)
+
+# ----------------------------------------------------------------------
+# UI helpers
+# ----------------------------------------------------------------------
+
+def _btn_spacer():
+    """Vertical spacer that aligns buttons with adjacent selectbox labels."""
+    st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+
+def section_heading(emoji, text):
+    st.markdown(
+        f"<h2 style='margin-top:0.4rem;margin-bottom:0.2rem'>{emoji} {text}</h2>",
+        unsafe_allow_html=True,
     )
 
-    # ----------------------------------------------------------------------
-    # Make rays of same length, originating from satellite, with uniformly spaced x
-    # ----------------------------------------------------------------------
-
-    rays_x1 = np.repeat(0, SIMULATED_NUM_RAYS)
-    rays_x2 = np.linspace(-1, 1, SIMULATED_NUM_RAYS)
-    rays_x2[
-        np.argwhere(rays_x2 == 0)
-    ] = 0.00001  # adjustment so root can be found where delta x = 0
-    rays_x = np.column_stack([rays_x1, rays_x2])
-    rays_y1 = np.repeat(SAT_ALTITUDE, SIMULATED_NUM_RAYS)
-    rays_y2 = SAT_ALTITUDE - np.sqrt(SAT_ALTITUDE**2 - np.square(rays_x2))
-    rays_y = np.column_stack([rays_y1, rays_y2])
-
-    # ----------------------------------------------------------------------
-    # Find bisections of rays with topography, determine ray unit vectors, and find POCA
-    # ----------------------------------------------------------------------
-
-    bisections = np.full((SIMULATED_NUM_RAYS, 2), np.nan)
-    ray_unit_vecs = np.full((SIMULATED_NUM_RAYS, 2), np.nan)
-    ray_lengths = np.full(SIMULATED_NUM_RAYS, np.nan)
-    prev_length = np.inf
-    poca_index = 0
-    for ray in range(SIMULATED_NUM_RAYS):
-
-        # find bisections
-        ray_func = interp1d(rays_x[ray], rays_y[ray], fill_value="extrapolate")
-        f = lambda x: spline(x) - ray_func(
-            x
-        )  # difference function, its zero marks the intersection
-        try:
-            root = spopt.root_scalar(
-                f, x0=rays_x[ray], bracket=[-1, 1]
-            ).root  # find root
-            bisections[ray] = [root, spline(root)]
-        except:
-            continue
-
-        # determine ray unit vector
-        ray_vec = np.array((rays_x[ray][0], rays_y[ray][0])) - np.array(
-            (rays_x[ray][-1], rays_y[ray][-1])
-        )
-        ray_unit_vecs[ray] = ray_vec / np.linalg.norm(ray_vec)
-
-        # find POCA
-        ray_lengths[ray] = np.linalg.norm(ray_vec - np.array(bisections[ray]))
-        if ray_lengths[ray] < prev_length:
-            prev_length = ray_lengths[ray]
-            poca_index = ray
-
-    # ----------------------------------------------------------------------
-    # Get the reflection and return frames for each ray
-    # ----------------------------------------------------------------------
-
-    # only take frames where pulses are moving, ignoring the additonal added time at the end
-    ADJUSTED_ANIMATION_LENGTH = ANIMATION_LENGTH - ADDED_END_TIME
-    ADJUSTED_NUM_FRAMES = int(FPS * (ADJUSTED_ANIMATION_LENGTH))
-
-    # get reflection and return frames based on propotion of length to sat altitude
-    return_frame = (ray_lengths / SAT_ALTITUDE) * ADJUSTED_NUM_FRAMES
-    reflection_frame = return_frame / 2
-    return_frame = np.round(return_frame).astype("int")
-    reflection_frame = np.round(reflection_frame).astype("int")
-
-    # ----------------------------------------------------------------------
-    # Generate waveform
-    # ----------------------------------------------------------------------
-
-    NUM_FRAMES = int(FPS * (ANIMATION_LENGTH))
-    waveform = np.zeros(NUM_WF_SAMPLES)
-
-    # convert return frames to samples on waveform
-    FRAME_TO_SAMPLE = NUM_WF_SAMPLES / NUM_FRAMES
-    return_sample = return_frame * FRAME_TO_SAMPLE
-
-    # get the pulse drop off over time
-    PULSE_EFFECT_DURATION_SAMPLES = int(
-        np.ceil(FPS * PULSE_EFFECT_DURATION * FRAME_TO_SAMPLE)
+def render_plot(dim, topo):
+    """Render the 2D or 3D altimetry animation. dim must be '2d' or '3d'."""
+    ss  = st.session_state
+    fn  = animate_altimetry_waveform_2d if dim == "2d" else animate_altimetry_waveform_3d
+    fig = fn(
+        topo, output_path=None,
+        num_rays_to_display=ss[f"nr_{dim}"],
+        range_window_top=ss[f"rw_{dim}"][1],
+        range_window_bottom=ss[f"rw_{dim}"][0],
+        show_poca=ss[f"sp_{dim}"],
+        show_range_window=ss[f"srw_{dim}"],
+        show_rays=ss[f"sray_{dim}"],
+        wf_noise_amplitude=ss[f"wn_{dim}"],
     )
-
-    if PULSE_EFFECT_DURATION_SAMPLES == 0:
-        PULSE_EFFECT_DURATION_SAMPLES = 1
-    pulse_drop_off_time = np.flip(
-        np.logspace(
-            np.log(RAY_ANGLE_DROPOFF_MIN),
-            np.log(1),
-            PULSE_EFFECT_DURATION_SAMPLES,
-            base=np.exp(1),
-        )
-    )
-
-    # get the pulse drop off over angle
-    ODD = NUM_RAYS % 2
-    lhs = np.logspace(
-        np.log(RAY_ANGLE_DROPOFF_MIN),
-        np.log(1),
-        SIMULATED_NUM_RAYS // 2 + ODD,
-        base=np.exp(1),
-    )
-    rhs = np.flip(lhs)
-    if ODD:
-        pulse_drop_off_angle = np.concatenate((lhs[:-1], [1], rhs[1:]))
-    else:
-        pulse_drop_off_angle = np.concatenate((lhs, rhs))
-
-    # loop through and add to waveform
-    for ray in range(SIMULATED_NUM_RAYS):
-        if (
-            return_sample[ray] < 0
-        ):  # nan check - converted to negative overflow (I think?) in int conversion
-            continue
-        impact = np.zeros(NUM_WF_SAMPLES)
-        pulse = pulse_drop_off_time * pulse_drop_off_angle[ray]
-        try:
-            impact[
-                int(return_sample[ray]) : int(return_sample[ray])
-                + PULSE_EFFECT_DURATION_SAMPLES
-            ] = pulse
-            waveform += impact
-        except:
-            indices_left = len(impact[int(return_sample[ray]) :])
-            impact[int(return_sample[ray]) :] = pulse[:indices_left]
-            waveform += impact
-
-    # add noise and normalise
-    noise = np.random.uniform(
-        low=0, high=NOISE_PEAK * np.max(waveform), size=NUM_WF_SAMPLES
-    )
-    waveform += noise
-    waveform = waveform / np.max(waveform)
-
-    # convert from samples to frames for animation
-    waveform = np.array(
-        [
-            waveform[round(frame)]
-            for frame in np.linspace(0, NUM_WF_SAMPLES - 1, NUM_FRAMES)
-        ]
-    )
-
-    # ----------------------------------------------------------------------
-    # Generate location frames for animated ray pulses
-    # ----------------------------------------------------------------------
-
-    # evenly sample NUM_RAY number of the simulated rays for animating
-    animated_ray_indices = np.round(
-        np.linspace(0, SIMULATED_NUM_RAYS - 1, NUM_RAYS)
-    ).astype("int")
-
-    # get pulse locations
-    pulse_loc = np.zeros((NUM_RAYS, NUM_FRAMES, 2))
-
-    for ray in range(NUM_RAYS):
-        pulse_loc[ray, :, :] = [0, SAT_ALTITUDE]
-        if reflection_frame[animated_ray_indices][ray] < 0:
-            continue
-        x_coords = np.linspace(
-            0,
-            bisections[animated_ray_indices][ray][0],
-            reflection_frame[animated_ray_indices][ray],
-        )
-        x_coords = np.concatenate((x_coords, np.flip(x_coords)))
-        y_coords = np.linspace(
-            SAT_ALTITUDE,
-            bisections[animated_ray_indices][ray][1],
-            reflection_frame[animated_ray_indices][ray],
-        )
-        y_coords = np.concatenate((y_coords, np.flip(y_coords)))
-        coords = np.dstack((x_coords, y_coords)).squeeze()
-
-        # remove or add frames to handle rounding errors
-        length_diff = return_frame[animated_ray_indices][ray] - len(coords)
-        if length_diff > 0:
-            coords = np.vstack((coords, np.tile([0, SAT_ALTITUDE], (length_diff, 1))))
-        elif length_diff < 0:
-            coords = coords[:length_diff]
-
-        pulse_loc[ray, : return_frame[animated_ray_indices][ray]] = coords
-
-    pulse_loc = np.moveaxis(pulse_loc, 1, 0)  # reorganise so frames are first
-
-    # ----------------------------------------------------------------------
-    # Initialise figures
-    # ----------------------------------------------------------------------
-
-    # get POCA on animated ray
-    poca_index = animated_ray_indices[
-        np.argmin(np.absolute(animated_ray_indices - poca_index))
-    ]
-
-    # get ray colours, fade with angle drop off#
-    ray_colours = np.array(
-        [
-            "rgba(255, 0, 0, "
-            + str(pulse_drop_off_angle[animated_ray_indices][ray])
-            + ")"
-            for ray in range(NUM_RAYS)
-        ]
-    )
-
-    # generate range window points for plot 1
-    range_window_plot1 = np.array(range_window) * SAT_ALTITUDE
-    range_window_points_start = np.full((NUM_RAYS, 2), np.nan)
-    range_window_points_end = np.full((NUM_RAYS, 2), np.nan)
-    for ray in range(NUM_RAYS):
-        range_window_points_start[ray] = np.array(
-            (rays_x2[animated_ray_indices][ray], rays_y2[animated_ray_indices][ray])
-        ) + np.array(ray_unit_vecs[animated_ray_indices][ray] * range_window_plot1[0])
-        range_window_points_end[ray] = np.array(
-            (rays_x2[animated_ray_indices][ray], rays_y2[animated_ray_indices][ray])
-        ) + np.array(ray_unit_vecs[animated_ray_indices][ray] * range_window_plot1[1])
-
-    # generate initial elements for plot 1
-    fig = make_subplots(
-        rows=1, cols=2, column_widths=[0.65, 0.35], horizontal_spacing=0.01
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=topography_x,
-            y=spline(topography_x),
-            mode="lines",
-            name="Topography",
-            fill="tozeroy",
-            showlegend=False,
-            marker=dict(color="gray"),
-            line_shape="spline",
-        ),
-        row=1,
-        col=1,
-    )
-    for ray in range(NUM_RAYS):
-        fig.add_trace(
-            go.Scatter(
-                x=[0, bisections[animated_ray_indices][ray, 0]],
-                y=[SAT_ALTITUDE, bisections[animated_ray_indices][ray, 1]],
-                mode="lines",
-                showlegend=False,
-                name="Ray " + str(ray),
-                marker=dict(color=ray_colours[ray]),
-                line=dict(dash="dash"),
-            ),
-            row=1,
-            col=1,
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=[bisections[animated_ray_indices][ray, 0]],
-                y=[bisections[animated_ray_indices][ray, 1]],
-                mode="markers",
-                showlegend=False,
-                name="Ray Bisect " + str(ray),
-                marker=dict(color=ray_colours[ray], symbol="x"),
-            ),
-            row=1,
-            col=1,
-        )
-    fig.add_trace(
-        go.Scatter(
-            x=[bisections[poca_index, 0]],
-            y=[bisections[poca_index, 1]],
-            mode="markers",
-            showlegend=False,
-            name="POCA",
-            marker=dict(
-                color="yellow",
-                size=12,
-                symbol="star",
-                line=dict(width=1.5, color="orange"),
-            ),
-        ),
-        row=1,
-        col=1,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=range_window_points_start[:, 0],
-            y=range_window_points_start[:, 1],
-            mode="lines",
-            line_shape="spline",
-            name="Range Window Start (Plot 1)",
-            fillcolor="rgba(100, 255, 100, 0.15)",
-            marker=dict(color="rgba(0, 255, 0, 1)"),
-            line=dict(dash="dash"),
-            showlegend=False,
-        ),
-        row=1,
-        col=1,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=range_window_points_end[:, 0],
-            y=range_window_points_end[:, 1],
-            mode="lines",
-            line_shape="spline",
-            name="Range Window End (Plot 1)",
-            fill="tonexty",
-            fillcolor="rgba(100, 255, 100, 0.15)",
-            marker=dict(color="rgba(0, 255, 0, 1)"),
-            line=dict(dash="dash"),
-            showlegend=False,
-        ),
-        row=1,
-        col=1,
-    )
-
-    # generate range window points for plot 2
-    WAVEFORM_LENGTH_WITHOUT_ADDED_TIME = NUM_FRAMES - NUM_FRAMES * (
-        ADDED_END_TIME / ANIMATION_LENGTH
-    )
-    range_window_plot2 = (
-        np.flip(1 - np.array(range_window)) * WAVEFORM_LENGTH_WITHOUT_ADDED_TIME
-    )
-
-    # generate initial elements for plot 2
-    fig.add_trace(
-        go.Scatter(
-            x=[range_window_plot2[0], range_window_plot2[0]],
-            y=[0, 1],
-            mode="lines",
-            name="Range Window Start (Plot 2)",
-            fillcolor="rgba(100, 255, 100, 0.15)",
-            marker=dict(color="rgba(0, 255, 0, 1)"),
-            line=dict(dash="dash"),
-            showlegend=False,
-        ),
-        row=1,
-        col=2,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=[range_window_plot2[1], range_window_plot2[1]],
-            y=[0, 1],
-            mode="lines",
-            name="Range Window End (Plot 2)",
-            fillcolor="rgba(100, 255, 100, 0.15)",
-            fill="tonextx",
-            marker=dict(color="rgba(0, 255, 0, 1)"),
-            line=dict(dash="dash"),
-            showlegend=False,
-        ),
-        row=1,
-        col=2,
-    )
-    fig.add_trace(
-        go.Scatter(
-            y=[waveform[0]],
-            name="Waveform",
-            fill="tozeroy",
-            marker=dict(color="skyblue"),
-            showlegend=False,
-        ),
-        row=1,
-        col=2,
-    )
-
-    # generate pulses for plot 1
-    for ray in range(NUM_RAYS):
-        fig.add_trace(
-            go.Scatter(
-                x=[0],
-                y=[SAT_ALTITUDE],
-                name="PULSE_" + str(ray),
-                mode="markers",
-                showlegend=False,
-                marker=dict(color=ray_colours[ray]),
-            ),
-            row=1,
-            col=1,
-        )
-
-    # ----------------------------------------------------------------------
-    # Add S3 image
-    # ----------------------------------------------------------------------
-
-    satImage = Image.open("s3.png")
-    fig.add_layout_image(
-        dict(
-            source=satImage,
-            xref="x",
-            yref="y",
-            x=0.03,
-            y=0.945 * SAT_ALTITUDE,
-            sizex=0.5,
-            sizey=0.5,
-            xanchor="right",
-            yanchor="bottom",
-        )
-    )
-
-    # ----------------------------------------------------------------------
-    # Make frames
-    # ----------------------------------------------------------------------
-
-    frame_data = np.tile(go.Scatter(x=[0], y=[SAT_ALTITUDE]), (NUM_FRAMES, NUM_RAYS))
-    for frame in range(NUM_FRAMES):
-        for ray in range(NUM_RAYS):
-            if frame >= return_frame[animated_ray_indices][ray]:
-                continue
-            else:
-                frame_data[frame, ray] = go.Scatter(
-                    x=[pulse_loc[frame, ray, 0]], y=[pulse_loc[frame, ray, 1]]
-                )
-
-    waveform_rw1_frame_data = np.array(
-        [
-            go.Scatter(x=[range_window_plot2[0], range_window_plot2[0]], y=[0, 1])
-            for frame in range(NUM_FRAMES)
-        ]
-    )  # adding unchanging rw lines on waveform as otherwise they are removed on animation play
-    waveform_rw2_frame_data = np.array(
-        [
-            go.Scatter(x=[range_window_plot2[1], range_window_plot2[1]], y=[0, 1])
-            for frame in range(NUM_FRAMES)
-        ]
-    )
-    waveform_frame_data = np.array(
-        [go.Scatter(y=waveform[0:frame]) for frame in range(NUM_FRAMES)]
-    )
-    frame_data = np.concatenate(
-        [
-            waveform_rw1_frame_data[:, np.newaxis],
-            waveform_rw2_frame_data[:, np.newaxis],
-            waveform_frame_data[:, np.newaxis],
-            frame_data,
-        ],
-        axis=1,
-    )
-
-    NUM_TRACES_BEFORE = 2 * NUM_RAYS + 4
-    frames = [
-        dict(
-            name=frame,
-            data=list(frame_data[frame]),
-            traces=np.arange(NUM_TRACES_BEFORE, NUM_RAYS + NUM_TRACES_BEFORE + 3),
-        )
-        for frame in range(NUM_FRAMES)
-    ]
-
-    # ----------------------------------------------------------------------
-    # Make sliders and buttons
-    # ----------------------------------------------------------------------
-
-    updatemenus = [
-        {
-            "buttons": [
-                {
-                    "args": [
-                        None,
-                        {
-                            "frame": {"duration": 1000 / FPS, "redraw": False},
-                            "fromcurrent": True,
-                            "transition": {"duration": 0},
-                            "mode": "next",
-                        },
-                    ],
-                    "label": "Play",
-                    "method": "animate",
-                },
-                {
-                    "args": [
-                        [None],
-                        {
-                            "frame": {"duration": 0, "redraw": False},
-                            "mode": "immediate",
-                            "transition": {"duration": 0},
-                        },
-                    ],
-                    "label": "Pause",
-                    "method": "animate",
-                },
-            ],
-            "direction": "left",
-            "pad": {"r": 0, "t": 50},
-            "showactive": False,
-            "type": "buttons",
-            "x": 0.5,
-            "xanchor": "right",
-            "y": 0,
-            "yanchor": "top",
-        }
-    ]
-
-    # ----------------------------------------------------------------------
-    # Finalise and save
-    # ----------------------------------------------------------------------
-
-    fig.frames = frames
-    fig.update_layout(updatemenus=updatemenus)
-    fig.update_layout(
-        xaxis2=dict(
-            showgrid=False, visible=False, range=[-5, NUM_FRAMES], fixedrange=True
-        ),
-        yaxis2=dict(showgrid=False, visible=False, range=[0, 1.5], fixedrange=True),
-    )
-    fig.update_layout(
-        xaxis=dict(showgrid=False, visible=False, range=[-1, 1], fixedrange=True),
-        yaxis=dict(showgrid=False, visible=False, range=[-0.1, 4.35], fixedrange=True),
-    )
-    fig.update_layout(
-        dict(plot_bgcolor="rgba(0, 0, 0, 0)", paper_bgcolor="rgba(0, 0, 0, 0)")
-    )
-    fig.update_layout(height=PLOT_HEIGHT)
-
-    return fig
-
+    st.plotly_chart(fig, theme="streamlit", width="stretch", config=dict(displayModeBar=False))
 
 # ----------------------------------------------------------------------
 # Main
 # ----------------------------------------------------------------------
 
-
 def main():
-    """
-    Run the Satellite Radar Altimetry Tool web application.
 
-    This function sets up the Streamlit web app to provide an interactive tool for visualizing
-    satellite radar altimetry. It configures the app layout, defines input parameters, and displays
-    the resulting plot based on user input.
+    # ------------------------------------------------------------------
+    # Sidebar
+    # ------------------------------------------------------------------
 
-    Returns:
-        None
-    """
+    st.title("🛰️ Satellite Radar Altimetry Visualiser")
 
-    # ----------------------------------------------------------------------
-    # Set up
-    # ----------------------------------------------------------------------
-
-    APP_TITLE = "Satellite Radar Altimetry Tool"
-
-    st.set_page_config(APP_TITLE, page_icon=":satellite:", layout="wide")
-    st.title(APP_TITLE)
-
-    st.sidebar.title(":globe_with_meridians: About")
+    st.sidebar.title("About")
     st.sidebar.info(
+        "Learn how satellites measure the height of Earth from space! This interactive "
+        "tool combines clear explanations with hands-on simulators to show how radar pulses "
+        "reflect from the surface, form waveforms, and reveal elevation."
+    )
+    st.sidebar.title("Contact")
+    st.sidebar.markdown(
         """
-        This interactive web app is designed to provide an educational tool that helps visualise the complex nuances of satellite radar altimetry.
+**Dr Joe Phillips**     
+[![GitHub](https://badgen.net/badge/icon/GitHub/green?icon=github&label)](https://github.com/Joe-Phillips) [![LinkedIn](https://badgen.net/badge/icon/linkedin/blue?icon=linkedin&label)](https://www.linkedin.com/in/joe-b-phillips/) j.phillips5@lancaster.ac.uk
+
+Special thanks to **Dom Hardy**
+d.j.hardy@lancaster.ac.uk
         """
     )
-
-    st.sidebar.title(":email: Contact")
-    st.sidebar.info(
-        """
-        Made by Joe Phillips.
-
-[![Repo](https://badgen.net/badge/icon/GitHub/green?icon=github&label)](https://github.com/Joe-Phillips) 
-[![Repo](https://badgen.net/badge/icon/linkedin/blue?icon=linkedin&label)](https://www.linkedin.com/in/joe-b-phillips/)
-j.phillips5@lancaster.ac.uk
-
-Special thanks to Dom Hardy for help with setting up Streamlit. 
-d.j.hardy@lancaster.ac.uk 
-        """
-    )
-
+    st.sidebar.title("")
+    st.sidebar.markdown("---")
     st.sidebar.image("lancs_logo.png")
     st.sidebar.image("cpom_logo.png")
 
-    st.markdown(
-        """
-        ### :satellite: What is Satellite Radar Altimetry?
+    # ------------------------------------------------------------------
+    # Introduction
+    # ------------------------------------------------------------------
 
-Satellite radar altimetry is a technique used to measure the height of surfaces from space. It works by emitting **radar pulses** :large_orange_circle: down from the satellite toward the **surface** :black_square_button: at the speed of light. These pulses bounce off the surface and return to the satellite. By measuring the time it takes for the pulses to return we can precisely calculate the distance to the surface, known as the range. Since the satellites orbit at a known altitude above the Earth, subtracting the range measurement from the satellite altitude gives the height of the surface below. By taking continuous measurements as it orbits, the satellite builds up a detailed picture of the topography of the surface. Scientists can then use this data to track changes in sea level rise, melting ice sheets, flooding, and other environmental changes.
-
-Reflected echoes are captured in the form of a **waveform** :large_blue_square:, which records the power recieved by the altimeter over time. In general, surface elevation values extracted from the waveform are attributed to the point of closest approach (**POCA** :star:) of the surface to the satellite. These commonly correspond to a point on the foremost peak of the waveform, known as the leading edge. Although there exist many algorithms to automate this process, finding POCA and extracting associated elevation measurements from the waveform becomes more difficult over increasingly complex surfaces.
-
-Once a pulse is emitted from the satellite, the altimeter can only measure the reflected echoes over a limited time window or **range window** :large_green_square:. If the satellite measures the echoes at the wrong time, returns can be missed. This is known as losing track. The size of this range window varies from satellite to satellite, and knowing where to place it can be a non-trivial problem, especially over complex surfaces.
-        """
-    )
+    st.markdown("""<hr style="border: 1px solid black;">""", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading("📡", "What is satellite radar altimetry?")
 
     st.markdown(
-        """
-        ### :toolbox: The Model
-        
-To help visualise the process by which satellite radar altimetry works, the model below simulates a 2D case for any arbritrary, inputted topography. This is formed of a list of numbers below, and represents the height of the surface, equidistant along the x-axis. 
-
-After inputting topography, to run the model, press the **PLAY** button below. This emits pulses from the satellite towards the surface, decreasing exponentially in power over emission angle, which are then reflected, and subsequently captured by the satellite. On the right, the waveform records the recieved power with respect to time, with the addition of simulated Gaussian noise. For both the 2D view and the waveform, a range window is also shown, highlighted in green.
-
-For given topography, any list with length greater than two is allowed, and as input numbers are normalised, any number is acceptable.
-
-First try creating an echo for a flat surface by adding **1,1**, presssing **ENTER**, and clicking **PLAY** below!
-        """
+        "There are currently over *13,000* satellites in space, each performing a huge variety of different "
+        "jobs. Some of these, such as the James Webb telescope, take detailed pictures of outer space. Others, "
+        "such as Sentinel-2, orbit around the planet, taking high quality pictures of the surface of the "
+        "Earth. And some, such as CryoSat-2, use special instruments to accurately measure the height of "
+        "the world below them. "
+        "The study of the measurements these satellites take is known as **remote sensing**. Here, we "
+        "cover how satellites like CryoSat-2 work, and how they are able to give scientists a "
+        "detailed picture of the height of the planet everywhere."
     )
 
-    # ----------------------------------------------------------------------
-    # Parameters
-    # ----------------------------------------------------------------------
+    st.markdown(
+        "Satellites carrying radar altimeters measure the height of the ground below them by firing a "
+        "**pulse** (🔴) of energy at the ground and seeing how long it takes to come back. This is kind "
+        "of like how a bat navigates in the dark using echo-location, but on a much larger scale! "
+        "The energy travels down to the ground and spreads out in a wide circle, with the strongest signal "
+        "directly beneath the satellite at a point called **nadir**. This area the satellite illuminates is "
+        "called its footprint. To picture this, imagine pointing a torch at a wall. In fact, both "
+        "altimeters and torches are very similar in that they both emit light (energy) - just the "
+        "altimeter uses light at wavelengths too long for us to see (radio), and also times how long "
+        "the light takes to bounce back! This type of light allows the satellites to see through the "
+        "atmosphere and even through weather such as clouds and rain, which other satellites carrying "
+        "cameras cannot do. "
+        "Since these echoes (radio waves) travel at the speed of light (*299,792,458* meters per second!), "
+        "the satellite can work out how far away the ground is below it. Even tiny differences in these "
+        "timings can reveal detailed information about the shape of the surface below. By doing this "
+        "continuously, tracing a path all across the globe (called its **track**), scientists can build "
+        "up precise maps of surface height *everywhere*. This is useful for many things such as "
+        "tracking sea level rise and figuring out how much ice sheets are melting."
+    )
+
+    st.markdown(
+        "As these echoes return to the satellite, they are recorded as a **waveform** (🟦). This is just "
+        "a graph of how many echoes (the power) the satellite receives back over time. "
+        "The shape of this waveform carries lots of useful information about the ground below. "
+        "The first steep rise in the waveform, which is called the **leading edge**, corresponds to the "
+        "highest point on the surface, closest to the satellite. Because this point is closest, any "
+        "echoes that bounce off it return back to the satellite first. This point is known as the "
+        "**Point of Closest Approach**, or **POCA** (⭐). "
+        "By figuring out the time between when the satellite first sends a pulse of energy, to when the echo first "
+        "returns on the leading edge of the waveform, scientists can figure out the distance between the POCA "
+        "on the surface and the satellite. By knowing how high up the satellite is (over *700,000* meters!), they can "
+        "then work out the height of the POCA!"
+    )
+
+    st.markdown(
+        "Once the satellite fires a burst of energy, it only listens for the returning echo over a small "
+        "period of time called the **range window** (🟩). This listening window is both a window in time "
+        "(on the waveform) and also a window in physical space (below the satellite). "
+        "Because the energy the satellite fires and listens for travels at a constant speed, the distance "
+        "travelled by the energy over a given bit of time is always the same. Therefore, these windows in space and time "
+        "are actually the same thing! The less time the satellite listens for, the less of the surface it might "
+        "capture. For very mountainous areas, which might have a large difference in their lowest and "
+        "highest elevation, a small range window might mean that only the top or the bottom of the "
+        "surface below is captured. If the window is placed in the wrong position, echoes can be missed "
+        "entirely. This is called **losing track**. "
+        "Getting this right - knowing when/where to listen for echoes - can be tough, and even the "
+        "complicated algorithms onboard sometimes struggle."
+    )
 
     st.markdown(
         """
-    ### :wrench: Parameters
-    """
+        <div class="callout-box">
+        <b><i>Phew</i></b> - that was quite a lot of information. And we even simplified it a lot (<i>sorry scientists</i>)!
+        So to make it all easier to understand, we put together two interactive simulators below that
+        will hopefully help it click.
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    topography_input = st.text_input(
-        "Topography (2 or More Comma-Seperated Numbers): ", placeholder="1,2,3,2,1"
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading("🌍", "But what does this actually look like?")
+
+    st.markdown(
+        """
+        We put together two new simulators to help you visualise how satellite radar altimetry works:
+
+        ##### ▸ **2D simulator**
+
+        This is a simplified two-dimensional model, where we only consider the surface elevation and its
+        position left and right. This is actually similar to how many modern satellite radar altimeters work,
+        using a process called **Synthetic Aperture Radar** (SAR), which changes the satellite's footprint on the
+        surface into thin, wide strips (almost 2D). This lets the satellite capture much more information along
+        its track, rather than having to wait for echoes to return before emitting more energy.
+
+        ##### ▸ **3D simulator**
+
+        This is a fully three-dimensional version of the model. Here, the emitted pulses spread out across a
+        full circular footprint. This is similar to how altimeters work without SAR processing, and is generally
+        referred to as **Low Resolution Mode** (LRM). Instruments such as these can be found onboard older
+        satellites and current satellites operating over less complicated surfaces such as parts of the ocean.
+
+        <br>
+
+        **Both of these simulators are approximations!** Although they don't replicate the real instruments
+        perfectly, they capture the key ideas. In general, the 2D (sort-of-SAR) waveforms look a bit more
+        realistic than what we would expect from the 3D (sort-of-LRM).
+
+        To get started, feel free to select an option from the surface shape menu below and press **▶ Play**!
+        """,
+        unsafe_allow_html=True,
     )
-    topography = np.array(topography_input.replace(" ", "").split(","))
 
-    try:
-        topography = topography.astype("float")
+    # ------------------------------------------------------------------
+    # 2D Simulator
+    # ------------------------------------------------------------------
 
-        if len(topography) <= 1 or (topography<0).any():
-            st.write(":warning: Invalid Input Topography :warning:")
-            topography = [""]
-
-        if (topography==0).all():
-            topography = np.repeat(1.0,len(topography))
-
-    except:
-        st.write(":warning: Invalid Input Topography :warning:")
-
-    range_window = st.slider("Range Window: ", 0.0, 1.0, (0.0, 0.4), step=0.01)
-    NUM_RAYS = st.slider("Number of Rays: ", 16, 64, 16)
-    NOISE_PEAK = st.slider("Noise Peak: ", 0.0, 0.1, 0.01, step=0.01)
-    RAY_ANGLE_DROPOFF_MIN = st.slider(
-        "Minimum Drop-off with Ray Angle: ", 0.01, 1.0, 0.1, step=0.01
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading("📊", "2D Simulator")
+    st.markdown(
+        "Choose a surface shape below, or select **Custom** and enter your own numbers "
+        "representing height from left to right. Press **▶ Play** to start!"
     )
 
-    PULSE_EFFECT_DURATION = (
-        0.1  # st.slider('Pulse Effect Duration (s): ', 0.0, 1.0, 0.1, step=0.01)
-    )
-    ANIMATION_LENGTH = 4  # st.slider('Animation Length (s): ', 1.0, 8.0, 4.0, step=0.5)
-    FPS = 30  # st.slider('FPS: ', 1, 60, 30, step=1)
+    sel_col_2d, btn_col_2d, _ = st.columns([1, 0.18, 1.82])
+    with sel_col_2d:
+        preset_2d = st.selectbox("Surface shape:", options=list(PRESET_2D_GENERATORS.keys()) + ["Custom"], key="preset_2d")
+    with btn_col_2d:
+        _btn_spacer()
+        if preset_2d == "Custom":
+            regen_2d = False
+            st.button("▶ Run", key="run_btn_2d", type="primary", help="Run the simulator with your custom surface")
+        else:
+            regen_2d = st.button("↺ New", key="regen_btn_2d", type="primary", help="Regenerate this surface")
 
-    # ----------------------------------------------------------------------
-    # Display
-    # ----------------------------------------------------------------------
+    if (preset_2d != st.session_state.get("last_preset_2d") or regen_2d) and preset_2d in PRESET_2D_GENERATORS:
+        st.session_state["last_preset_2d"] = preset_2d
+        st.session_state["topo_2d_cached"] = PRESET_2D_GENERATORS[preset_2d]()
 
-    st.markdown("### :chart_with_upwards_trend: Plot")
-
-    PLOT_HEIGHT = 800
-    try:
-        st.plotly_chart(
-            altimetry_plot(
-                topography,
-                range_window,
-                NUM_RAYS,
-                ANIMATION_LENGTH,
-                FPS,
-                PULSE_EFFECT_DURATION,
-                NOISE_PEAK,
-                RAY_ANGLE_DROPOFF_MIN,
-                PLOT_HEIGHT=PLOT_HEIGHT,
-            ),
-            theme="streamlit",
-            use_container_width=True,
-            height=PLOT_HEIGHT,
-            **{"config": dict(displayModeBar=False)}
+    if preset_2d == "Custom":
+        custom_input = st.text_input(
+            "Surface heights (space or comma separated):",
+            placeholder="e.g. 3 8 2 9 5",
+            key="topo_2d_custom",
         )
-    except:
-        st.markdown("")
+        if custom_input:
+            try:
+                parsed = np.array(custom_input.replace(",", " ").split(), dtype=float)
+                if len(parsed) > 1 and (parsed >= 0).all():
+                    mn, mx        = parsed.min(), parsed.max()
+                    topo_2d       = parsed if mx == mn else (parsed - mn) / (mx - mn)
+                    topo_2d_valid = True
+                else:
+                    st.warning("Please enter at least two non-negative numbers.")
+                    topo_2d, topo_2d_valid = np.array([0.5, 0.5]), False
+            except Exception:
+                st.warning("Invalid input — please enter a list of numbers.")
+                topo_2d, topo_2d_valid = np.array([0.5, 0.5]), False
+        else:
+            topo_2d, topo_2d_valid = np.array([0.5, 0.5]), True
+    else:
+        topo_2d       = st.session_state.get("topo_2d_cached", PRESET_2D_GENERATORS[preset_2d]())
+        topo_2d_valid = True
+
+    if topo_2d_valid:
+        try:
+            render_plot("2d", topo_2d)
+        except Exception:
+            st.warning("Something went wrong generating the 2D plot. Check your surface input.")
+    
+    st.checkbox("Show range window", key="srw_2d")
+    st.slider("Range window position:", 0.0, 1.0, key="rw_2d", step=0.01)
+    st.checkbox("Show rays", key="sray_2d")
+    st.slider("Number of rays to display:", 5, 75, key="nr_2d", step=1)
+    st.checkbox("Show POCA", key="sp_2d")
+    st.slider("Amount of noise:", 0.0, 0.1, key="wn_2d", step=0.01)
+
+    # ------------------------------------------------------------------
+    # 3D Simulator
+    # ------------------------------------------------------------------
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading("📊", "3D Simulator")
+    st.markdown(
+        "Choose a surface shape below, and press **▶ Play** to get started!"
+    )
+    st.caption(
+        "**Navigating the 3D view:** left-click and drag to rotate, right-click and drag to pan, "
+        "scroll to zoom. Pressing Play will reset the view - pause first if you want to look around freely."
+    )
+
+    sel_col_3d, btn_col_3d, _ = st.columns([1, 0.18, 1.82])
+    with sel_col_3d:
+        preset_3d = st.selectbox("Surface shape:", options=PRESET_3D_OPTIONS, key="preset_3d")
+    with btn_col_3d:
+        _btn_spacer()
+        if preset_3d in PRESET_3D_GENERATORS:
+            regen_3d = st.button("↺ New", key="regen_btn_3d", type="primary", help="Regenerate this surface")
+        else:
+            regen_3d = False
+
+    if (preset_3d != st.session_state.get("last_preset_3d") or regen_3d) and preset_3d in PRESET_3D_GENERATORS:
+        st.session_state["last_preset_3d"] = preset_3d
+        st.session_state["topo_3d_cached"] = PRESET_3D_GENERATORS[preset_3d]()
+
+    if preset_3d == "Use 2D profile":
+        st.info(
+            "**Using 2D profile:** The surface profile from the 2D simulator above is repeated across the new "
+            "direction to fill the circular 3D footprint. Change the shape or preset in the 2D "
+            "simulator and the 3D view will update to match.",
+            icon="ℹ️",
+        )
+
+    if preset_3d == "Randomise":
+        rough_col, rand_btn_col = st.columns([2, 1])
+        with rough_col:
+            st.slider("Roughness:", 0.0, 1.0, key="roughness_3d", step=0.05,
+                      help="0 = perfectly flat, 1 = full peaks and troughs. Drag to reshape; press **Generate** for a new surface.")
+        with rand_btn_col:
+            _btn_spacer()
+            if st.button("🎲 Generate", key="rand_btn_3d", type="primary"):
+                st.session_state["random_topo_3d_base"] = _gen_sinusoidal_3d()
+
+    if preset_3d == "Use 2D profile":
+        if topo_2d_valid:
+            n   = max(len(topo_2d), 8)
+            row = np.interp(np.linspace(0, 1, n), np.linspace(0, 1, len(topo_2d)), topo_2d)
+            topo_3d, topo_3d_valid = np.tile(row, (n, 1)), True
+        else:
+            st.warning("Enter a valid surface profile in the 2D simulator above first.")
+            topo_3d, topo_3d_valid = None, False
+    elif preset_3d == "Randomise":
+        if "random_topo_3d_base" not in st.session_state:
+            st.session_state["random_topo_3d_base"] = _gen_sinusoidal_3d()
+        topo_3d       = _apply_roughness(st.session_state["random_topo_3d_base"], st.session_state["roughness_3d"])
+        topo_3d_valid = True
+    else:
+        topo_3d       = st.session_state.get("topo_3d_cached", PRESET_3D_GENERATORS[preset_3d]())
+        topo_3d_valid = True
+
+    if topo_3d_valid:
+        try:
+            render_plot("3d", topo_3d)
+        except Exception:
+            st.warning("Something went wrong generating the 3D plot.")
+
+    st.checkbox("Show range window", key="srw_3d")
+    st.slider("Range window position:", 0.0, 1.0, key="rw_3d", step=0.01)
+    st.checkbox("Show rays", key="sray_3d")
+    st.slider("Number of rays to display:", 5, 100, key="nr_3d", step=1)
+    st.checkbox("Show POCA", key="sp_3d")
+    st.slider("Amount of noise:", 0.0, 0.1, key="wn_3d", step=0.01)
+
+    # ------------------------------------------------------------------
+    # How does altimetry actually work?
+    # ------------------------------------------------------------------
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading("📡", "How does altimetry actually work?")
+    st.markdown(
+        """
+        We covered the basics above, but we simplified a lot. There is actually quite a lot more nuance in practice! Here
+        we go into a bit more detail.
+        """
+    )
+
+    with st.expander("Technical detail"):
+        st.markdown(
+            """
+            <div style="background-color:#fff8e1; border-left:4px solid #f0a500; padding:10px 14px; border-radius:4px; color:#4a3800; margin-bottom:1em;">
+            ⚠️ This section goes into more technical detail - so readers beware! It is also intended only as a brief overview.
+            </div>
+
+            **The waveform**
+
+            Over a flat surface, the expected waveform shape is well described by the **Brown model** (Brown, 1977),
+            which treats the surface as a collection of small independent scatterers. The model predicts a rapid
+            power rise at the leading edge - as the pulse wavefront first intersects the surface - followed by a
+            peak near the POCA return, and then a gradual exponential decay as echoes return from progressively
+            greater distances - those from the edges of the footprint travel further and are received with
+            diminishing antenna gain, while the trailing edge also carries weaker returns from various secondary
+            effects.
+
+            **Footprints and measurement resolution**
+
+            Three different concepts of 'footprint' matter in altimetry, and they are easy to confuse.
+
+            The **beam-limited footprint** is the total area on the ground illuminated by the antenna - defined by
+            the antenna's radiation pattern at its −3 dB half-power point. For a small spaceborne antenna this
+            can span tens of kilometres in diameter. Because the antenna aperture is physically small relative to
+            the radar wavelength, the beam cannot be focused more tightly without a much larger antenna - a
+            practical constraint for satellite instruments. Using this entire illuminated area as the measurement
+            resolution would make it impossible to attribute any given reflection to a specific surface location,
+            so a finer effective resolution is needed.
+
+            To achieve this, the transmitted pulse is shortened so that only returns within a narrow time window
+            contribute to each waveform bin. This defines the **pulse-limited footprint** - roughly 1-2 km in
+            diameter over the surface, centred on POCA. Think of each waveform bin as representing reflections
+            from a specific, small area of the surface: the shorter the pulse, the smaller that area, and the
+            finer the effective resolution. Returns from surfaces beyond this pulse-limited region but still
+            within the beam-limited area form concentric annuli at increasing ranges, contributing to later
+            parts of the waveform. However, because the altimeter must wait for each echo to return before
+            transmitting the next, the along-track sampling rate is limited to a low pulse repetition frequency
+            (PRF, typically ~2 kHz), and kilometre-scale along-track resolution is typical. This conventional
+            approach is called **Low Resolution Mode (LRM)**, and has been the standard for missions including
+            ERS-1/2, Envisat, and CryoSat-2 over ice sheet interiors. This is what the 3D simulator approximates.
+
+            SAR altimetry overcomes this along-track limitation by transmitting bursts of pulses at a much
+            higher PRF (~18 kHz for CryoSat-2). By coherently processing overlapping returns using Doppler
+            filtering - which exploits frequency shifts induced by satellite motion - SAR synthesises a longer
+            effective antenna aperture along-track, defining a third concept: the **Doppler-limited footprint**.
+            For CryoSat-2 this compresses the along-track footprint to ~380 m, dramatically improving
+            along-track resolution relative to LRM, while the across-track footprint remains beam-limited at
+            ~15 km. Stacking multiple looks of the same location also reduces radar speckle noise - this is
+            called **multilooking**. The across-track geometry is therefore dominant in SAR, making the 2D
+            (across-track slice) simulator a reasonable analogy.
+
+            **Retracking and slope correction**
+
+            Once a waveform is captured, extracting a usable elevation requires two key steps. The altimeter
+            does not measure absolute range directly - instead, each waveform is recorded relative to a
+            **reference range**: a known distance used to position the centre of the range window, computed
+            onboard from predicted orbit and surface elevation and stored alongside the waveform in the
+            Level-1 data products (the minimally-processed instrument output). The actual range to the surface
+            is then determined by finding where the leading edge falls relative to this reference and adding
+            the corresponding offset.
+
+            **Retracking** performs this step: it fits or thresholds the waveform's leading edge to identify
+            the precise range bin corresponding to the first surface return, which - combined with the
+            reference range - gives the total range from satellite to surface. Various algorithms exist,
+            from physical models fitting theoretical waveform shapes to empirical approaches based on waveform
+            geometry. **Slope correction** then determines *where on the surface* that range should be
+            attributed to, since POCA is rarely directly below the satellite over sloping terrain, and
+            typically relies on an auxiliary digital elevation model. Together, these steps reduce the full
+            waveform to a single point elevation estimate. Slope correction is the dominant source of error
+            in ice sheet altimetry, with uncertainties commonly reaching tens of metres in elevation and
+            kilometre-scale horizontal offsets over complex terrain.
+
+            **Surface tracking**
+
+            Before any of this can happen, the satellite's onboard system must position the range window
+            correctly - a process called **surface tracking**. Two broad approaches exist: *closed-loop
+            tracking*, where the window is continuously updated based on the most recently received echo,
+            and *open-loop tracking*, where it is driven by a pre-loaded elevation model rather than live
+            feedback. Open-loop tracking is more robust over complex terrain, where steep or rapidly changing
+            topography means the previous echo is often a poor predictor of the next. Over flat, predictable
+            terrain closed-loop tracking works well, but over rough or steeply sloping ground either approach
+            can struggle, causing *loss of track* where echoes fall outside the range window and no measurement
+            is recorded. For this reason, data coverage commonly degrades over complex terrain such as the
+            margins of ice sheets.
+
+            **Interferometric SAR (SARIn) mode**
+
+            CryoSat-2 carries a second antenna, offset in the across-track direction. By comparing the phase
+            of the signal received at each antenna - a technique called **interferometry** - it is possible to
+            measure the angle of arrival of the echo, resolving *where across-track* the POCA return came
+            from and bypassing slope correction entirely. Taking this further, *swath processing* uses phase
+            information throughout the waveform, not just at the leading edge, to recover elevations from
+            across the whole illuminated footprint, producing dense grids of elevation measurements from a
+            single pass. Neither simulator here uses interferometric information; both are based on power
+            waveforms only, which is the more general and challenging case faced by SAR-only missions such
+            as Sentinel-3.
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # ------------------------------------------------------------------
+    # How does the simulator work?
+    # ------------------------------------------------------------------
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading("🔧", "How does the simulator work?")
+    st.markdown(
+        """
+        Each simulator works by tracing imaginary lines (rays) from the satellite down to the surface. For
+        each ray, it finds where the line hits the ground and calculates how long the signal would take to
+        travel there and back. That travel time is mapped to a position in the waveform. The radar signal is
+        strongest directly below the satellite and naturally fades towards the edges, so rays pointing more
+        steeply downward contribute more to the waveform.
+
+        In the **2D simulator**, rays fan out left and right across a vertical slice of the surface. In the
+        **3D simulator**, they spread out in all directions across a circular area.
+
+        Below, we cover this in a bit more detail.
+        """
+    )
+
+    with st.expander("Technical detail"):
+        st.markdown(
+            """
+            <div style="background-color:#fff8e1; border-left:4px solid #f0a500; padding:10px 14px; border-radius:4px; color:#4a3800; margin-bottom:1em;">
+            ⚠️ This section goes into more technical detail - so readers beware! It is also intended only as a brief overview.
+            </div>
+
+            **The nitty gritty**
+
+            Both simulators use a geometric ray-casting approach. A virtual satellite is placed at a fixed
+            altitude and rays are cast downward across the footprint. For each ray, the intersection with
+            the topography surface is found numerically. The slant range to that intersection is then
+            compared to the total range window extent to assign a waveform bin:
+            ```
+            bin = round((1 - dist_from_range_window_bottom / range_window_size) * num_bins)
+            ```
+
+            Contributions are weighted by the antenna gain pattern, which describes how the antenna's
+            emission power drops with angle from nadir. This uses the two-dimensional antenna gain equation
+            from Wingham et al. (2006):
+            ```
+            G(θ, φ) = exp(-θ² x (cos²φ / γ₁² + sin²φ / γ₂²))
+            ```
+
+            where θ is the off-nadir angle, φ is the azimuth angle, and γ₁ = 0.0133 rad,
+            γ₂ = 0.0148 rad are the CryoSat-2 3 dB beamwidths in the along- and across-track directions.
+
+            In both simulators, instrument parameters - satellite altitude (~717 km), across-track
+            footprint size (~15 km), and range window height (~240 m) - are taken from CryoSat-2 in SARIn
+            mode. For the 2D case, the number of rays (512) and waveform bins (128) were tuned against
+            real waveforms. This has yet to be done for the 3D case, where we currently use 2048 rays and
+            128 bins. For reference, a real CryoSat-2 SARIn waveform has 1024 bins. Matching this in
+            practice can be done using interpolation.
+
+            Currently, the simulators are unable to account for surface elevations that fall outside the
+            range window. To handle this, input topography is rescaled from [0, 1] to [0.2, 0.8] before
+            being passed to the simulator. The resulting waveform is then embedded into a longer
+            zero-padded waveform spanning the full animation, with the range window parameters adjusted
+            to match.
+
+            **2D simulator (SAR-analogous)**
+
+            Rays are cast across a 1D topographic profile at uniform across-track intervals, with the range
+            window bottom following a curved arc - the locus of points at equal slant range from the
+            satellite. This collapses the along-track dimension and is loosely analogous to SAR altimetry
+            as used by CryoSat-2 and Sentinel-3. In SAR mode, coherent processing of overlapping pulse
+            returns compresses the along-track footprint to around 380 m (for CryoSat-2), making the
+            across-track geometry dominant (~15 km beam-limited).
+
+            **3D simulator (LRM-analogous)**
+
+            Rays are cast across a 2D circular footprint (radius ~7.5 km) arranged on a hexagonal grid
+            with uniform spacing, with the number of rays dynamically adjusted to maintain equidistance.
+            This is loosely analogous to Low Resolution Mode (LRM) altimetry - the conventional
+            pulse-limited mode used by missions such as ERS-1/2 and Envisat, and by CryoSat-2 over ice
+            sheet interiors. LRM waveforms integrate returns from all azimuth directions simultaneously,
+            producing the characteristic shape over flat surfaces commonly modelled using the Brown model
+            (Brown, 1977).
+
+            **Limitations**
+
+            - *Trailing edge*: The most visible departure from real waveforms. In the simulator, each ray
+            contributes to a single waveform bin, so power drops off sharply after the peak. In reality,
+            the trailing edge decays more gradually. This artefact is most pronounced in the 3D case over
+            flat surfaces, where the departure from the Brown model trailing edge is most obvious.
+            - *Scattering*: The model assumes spatially uniform reflectivity. In reality, backscatter varies
+            with surface type, and over snow and ice, volume scattering and signal penetration into the
+            snowpack can shift the apparent surface return, affecting both waveform shape and retrieved
+            elevation.
+            - *No instrument effects*: Pulse compression, range migration, multilooking, and thermal noise
+            are not modelled. The noise visible on the waveform is uniform random noise added purely for
+            visual clarity.
+            - *Single intersection per ray*: Only the first surface hit per ray is recorded. Multi-path
+            returns and radar layover - where steep terrain causes reflections from different locations to
+            arrive at the same range - are not handled. Angle-dependent reflectivity (i.e. variation in
+            backscatter with incidence angle) is also not modelled; this was tested during development but
+            found to have negligible effect on the simulated waveform shape and was therefore omitted.
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 # ----------------------------------------------------------------------
-# Main
+# Entry point
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":
