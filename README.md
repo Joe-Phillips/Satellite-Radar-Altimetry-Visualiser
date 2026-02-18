@@ -10,7 +10,7 @@ Made by **Dr Joe Phillips**
 [![LinkedIn](https://badgen.net/badge/icon/linkedin/blue?icon=linkedin&label)](https://www.linkedin.com/in/joe-b-phillips/)  
 &nbsp; ✉️ j.phillips5@lancaster.ac.uk
 
-Special thanks to **Dom Hardy**.  
+Special thanks to **Dom Hardy**  
 &nbsp;✉️ d.j.hardy@lancaster.ac.uk
 
 ---
