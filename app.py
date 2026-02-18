@@ -18,9 +18,6 @@ st.set_page_config(
 
 # ----------------------------------------------------------------------
 # CSS
-# NOTE: Button colours are controlled by primaryColor in
-# .streamlit/config.toml. The rules here cover layout, sidebar chrome,
-# expanders, dropdowns, and the Plotly animation buttons only.
 # ----------------------------------------------------------------------
 
 st.markdown(
@@ -97,6 +94,10 @@ st.markdown(
                                               font-size: 12px !important; letter-spacing: 0.05em !important; }
         .updatemenu-item-rect:hover         { fill: #3a6a99 !important; stroke: #3a6a99 !important; }
         g.updatemenu rect.bg                { fill: transparent !important; stroke: none !important; }
+
+        /* ── Fixed-width action buttons (Run / New / Generate) ── */
+        [data-testid="stButton"] button     { width: fit-content !important; min-width: unset !important;
+                                              max-width: unset !important; white-space: nowrap !important; }
 
         /* ── Alert text ── */
         [data-testid="stAlert"] p,
@@ -236,7 +237,6 @@ def _gen_valley_3d():
     return vals + _noise_2d((n, n), rng, roll_amp=0.04, peak_amp=0.010)
 
 def _gen_sinusoidal_3d(n=14):
-    """Shared sinusoidal terrain base used by both Rough and Randomise modes."""
     rng    = np.random.default_rng()
     x      = np.linspace(0, 2 * np.pi, n)
     xx, yy = np.meshgrid(x, x)
@@ -264,7 +264,7 @@ PRESET_3D_GENERATORS = {
     "Valley": _gen_valley_3d,
     "Rough":  _gen_rough_3d,
 }
-# Full options list including special modes (no generator function)
+# Full options list including special modes
 PRESET_3D_OPTIONS = list(PRESET_3D_GENERATORS.keys()) + ["Randomise", "Use 2D profile"]
 
 # ----------------------------------------------------------------------
