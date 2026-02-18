@@ -630,7 +630,7 @@ def main():
             diminishing antenna gain, while the trailing edge also carries weaker returns from various secondary
             effects.
 
-            **Footprints and measurement resolution**
+            **Footprint geometry and measurement modes**
 
             Three different concepts of 'footprint' matter in altimetry, and they are easy to confuse.
 
@@ -654,15 +654,15 @@ def main():
             approach is called **Low Resolution Mode (LRM)**, and has been the standard for missions including
             ERS-1/2, Envisat, and CryoSat-2 over ice sheet interiors. This is what the 3D simulator approximates.
 
-            SAR altimetry overcomes this along-track limitation by transmitting bursts of pulses at a much
-            higher PRF (~18 kHz for CryoSat-2). By coherently processing overlapping returns using Doppler
-            filtering - which exploits frequency shifts induced by satellite motion - SAR synthesises a longer
-            effective antenna aperture along-track, defining a third concept: the **Doppler-limited footprint**.
-            For CryoSat-2 this compresses the along-track footprint to ~380 m, dramatically improving
-            along-track resolution relative to LRM, while the across-track footprint remains beam-limited at
-            ~15 km. Stacking multiple looks of the same location also reduces radar speckle noise - this is
-            called **multilooking**. The across-track geometry is therefore dominant in SAR, making the 2D
-            (across-track slice) simulator a reasonable analogy.
+            **Synthetic Aperture Radar** (SAR) altimetry overcomes this along-track limitation by transmitting
+            bursts of pulses at a much higher PRF (~18 kHz for CryoSat-2). By coherently processing overlapping
+            returns using Doppler filtering - which exploits frequency shifts induced by satellite motion - SAR
+            synthesises a longer effective antenna aperture along-track, defining a third concept: the
+            **Doppler-limited footprint**. For CryoSat-2 this compresses the along-track footprint to ~380 m,
+            dramatically improving along-track resolution relative to LRM, while the across-track footprint
+            remains beam-limited at ~15 km. Stacking multiple looks of the same location also reduces radar
+            speckle noise - this is called **multilooking**. The across-track geometry is therefore dominant in
+            SAR, making the 2D (across-track slice) simulator a reasonable analogy.
 
             **Retracking and slope correction**
 
