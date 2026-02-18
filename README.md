@@ -31,7 +31,7 @@ Instrument parameters (satellite altitude ~717 km, footprint ~15 km, range windo
 
 ## Structure
 ```
-├── app.py                            # Main Streamlit application
+├── main.py                            # Main Streamlit application
 ├── simulate_altimetry_waveform.py    # 2D and 3D waveform simulators
 ├── animate_altimetry_waveform.py     # Plotly animation generators
 ├── s3.png                            # Satellite image used in 2D plot
@@ -44,5 +44,5 @@ Instrument parameters (satellite altitude ~717 km, footprint ~15 km, range windo
 ## Running Locally
 ```bash
 pip install streamlit numpy scipy plotly
-streamlit run app.py
+streamlit run main.py
 ```
