@@ -1,7 +1,7 @@
 # Satellite Radar Altimetry Visualiser
 
 An interactive Streamlit app for visualising satellite radar altimetry, built for educational use.
-Access it [here](https://satellite-radar-altimetry-tool.streamlit.app/)!
+Access it [here](https://satellite-radar-altimetry-visualiser.streamlit.app/)!
 
 ---
 
