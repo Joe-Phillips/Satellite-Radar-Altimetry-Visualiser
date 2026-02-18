@@ -325,24 +325,23 @@ def main():
 
     st.title("🛰️ Satellite Radar Altimetry Visualiser")
 
-    st.sidebar.title("About")
+    st.sidebar.title(":globe_with_meridians: About")
     st.sidebar.info(
         "Learn how satellites measure the height of Earth from space! This interactive "
         "tool combines clear explanations with hands-on simulators to show how radar pulses "
         "reflect from the surface, form waveforms, and reveal elevation."
     )
-    st.sidebar.title("Contact")
-    st.sidebar.markdown(
+    st.sidebar.title(":email: Contact")
+    st.sidebar.info(
         """
-**Dr Joe Phillips**     
-[![GitHub](https://badgen.net/badge/icon/GitHub/green?icon=github&label)](https://github.com/Joe-Phillips) [![LinkedIn](https://badgen.net/badge/icon/linkedin/blue?icon=linkedin&label)](https://www.linkedin.com/in/joe-b-phillips/) j.phillips5@lancaster.ac.uk
+    Made by **Dr Joe Phillips**
 
-Special thanks to **Dom Hardy**
-d.j.hardy@lancaster.ac.uk
+    [![GitHub](https://badgen.net/badge/icon/GitHub/green?icon=github&label)](https://github.com/Joe-Phillips) [![LinkedIn](https://badgen.net/badge/icon/linkedin/blue?icon=linkedin&label)](https://www.linkedin.com/in/joe-b-phillips/) j.phillips5@lancaster.ac.uk
+
+    Special thanks to **Dom Hardy**
+    d.j.hardy@lancaster.ac.uk
         """
     )
-    st.sidebar.title("")
-    st.sidebar.markdown("---")
     st.sidebar.image("lancs_logo.png")
     st.sidebar.image("cpom_logo.png")
 
