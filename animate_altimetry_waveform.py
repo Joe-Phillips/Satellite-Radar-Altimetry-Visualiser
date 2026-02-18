@@ -503,21 +503,22 @@ def animate_altimetry_waveform_2d(
 
     fig.update_layout(
         updatemenus=updatemenus,
+        dragmode=False,
         xaxis=dict(
             showgrid=False, visible=False,
-            range=x_range,
+            range=x_range, fixedrange=True,
         ),
         yaxis=dict(
             showgrid=False, visible=False,
-            range=y_range,
+            range=y_range, fixedrange=True,
         ),
         xaxis2=dict(
             showgrid=False, visible=False,
-            range=[-5, num_wf_bins_to_sample_to + 5],
+            range=[-5, num_wf_bins_to_sample_to + 5], fixedrange=True,
         ),
         yaxis2=dict(
             showgrid=False, visible=False,
-            range=[-0.25, 1.25],
+            range=[-0.25, 1.25], fixedrange=True,
         ),
         height=plot_height,
         plot_bgcolor="rgba(0, 0, 0, 0)",
@@ -1140,8 +1141,8 @@ def animate_altimetry_waveform_3d(
 
     fig.update_layout(
         updatemenus=updatemenus,
-        xaxis=dict(showgrid=False, visible=False, range=[-5, num_wf_bins_to_sample_to + 5]),
-        yaxis=dict(showgrid=False, visible=False, range=[-0.25, 1.25]),
+        xaxis=dict(showgrid=False, visible=False, range=[-5, num_wf_bins_to_sample_to + 5], fixedrange=True),
+        yaxis=dict(showgrid=False, visible=False, range=[-0.25, 1.25], fixedrange=True),
         height=plot_height,
         plot_bgcolor="rgba(0, 0, 0, 0)",
         paper_bgcolor="rgba(0, 0, 0, 0)",
