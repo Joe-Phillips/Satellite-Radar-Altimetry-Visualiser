@@ -702,7 +702,7 @@ def main():
             CryoSat-2 carries a second antenna, offset in the across-track direction. By comparing the phase
             of the signal received at each antenna - a technique called **interferometry** - it is possible to
             measure the angle of arrival of the echo, resolving where across-track the POCA return came
-            from and bypassing slope correction entirely. Taking this further, *swath processing* uses phase
+            from and bypassing slope correction entirely. Taking this further, **swath processing** uses phase
             information throughout the waveform, not just at the leading edge, to recover elevations from
             across the whole illuminated footprint, producing dense grids of elevation measurements from a
             single pass. Neither simulator here uses interferometric information; both are based on power
@@ -822,3 +822,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
