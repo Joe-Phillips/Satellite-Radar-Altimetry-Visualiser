@@ -14,6 +14,7 @@ st.set_page_config(
     page_title="Satellite Radar Altimetry Visualiser",
     page_icon="🛰️",
     layout="wide",
+    initial_sidebar_state="expanded", 
 )
 
 # ----------------------------------------------------------------------
@@ -25,9 +26,13 @@ st.markdown(
     <style>
         /* ── Global ── */
         [data-testid="stHeader"]            { display: none !important; }
-        [data-testid="collapsedControl"]    { display: none !important; }
         button[kind="header"]               { display: none !important; }
+        [data-testid="collapsedControl"]        { display: none !important; }
         [data-testid="stSidebarCollapseButton"] { display: none !important; }
+        [data-testid="stSidebar"][aria-expanded="false"] { display: block !important;
+                                                        transform: none !important;
+                                                        min-width: 250px !important;
+                                                        width: 250px !important; }
         hr                                  { margin: 0.75rem 0 !important; }
         html, body,
         [data-testid="stAppViewContainer"],
