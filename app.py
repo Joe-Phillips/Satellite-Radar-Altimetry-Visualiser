@@ -25,14 +25,15 @@ st.markdown(
     """
     <style>
         /* ── Global ── */
-        [data-testid="stHeader"]            { display: none !important; }
-        button[kind="header"]               { display: none !important; }
-        [data-testid="collapsedControl"]        { display: none !important; }
+        [data-testid="stHeader"],
+        button[kind="header"],
+        [data-testid="collapsedControl"],
         [data-testid="stSidebarCollapseButton"] { display: none !important; }
+
         [data-testid="stSidebar"][aria-expanded="false"] { display: block !important;
-                                                        transform: none !important;
-                                                        min-width: 250px !important;
-                                                        width: 250px !important; }
+                                                           transform: none !important;
+                                                           min-width: 250px !important;
+                                                           width: 250px !important; }
         hr                                  { margin: 0.75rem 0 !important; }
         html, body,
         [data-testid="stAppViewContainer"],
@@ -40,7 +41,8 @@ st.markdown(
 
         /* ── Sidebar ── */
         [data-testid="stSidebar"]           { min-width: 250px !important; max-width: 250px !important;
-                                              width: 250px !important; background-color: #f0f4f8 !important; }
+                                              width: 250px !important; background-color: #f0f4f8 !important;
+                                              overflow: hidden !important; }
         [data-testid="stSidebarContent"]    { padding: 1rem 0.85rem !important; }
         [data-testid="stSidebar"],
         [data-testid="stSidebar"] p,
@@ -66,6 +68,13 @@ st.markdown(
         [data-testid="stSidebar"] img       { display: block; margin: 0.5rem auto 0.25rem; max-width: 80% !important; }
         [data-testid="stSidebar"] p img     { display: inline !important; margin: 0 !important; max-width: unset !important; }
 
+        /* ── Sidebar scrollbar hidden ── */
+        [data-testid="stSidebar"] > div:first-child { overflow-y: scroll !important;
+                                                      scrollbar-width: none !important;
+                                                      -ms-overflow-style: none !important; }
+        [data-testid="stSidebar"] > div:first-child::-webkit-scrollbar
+                                            { display: none !important; }
+
         /* ── Expanders ── */
         [data-testid="stExpander"]          { border: 1px solid #dde6ef !important; border-radius: 6px !important; }
         [data-testid="stExpander"] summary  { background-color: #f0f4f8 !important; border-radius: 6px !important; }
@@ -86,24 +95,24 @@ st.markdown(
         .stSelectbox [data-baseweb="select"] input
                                             { cursor: pointer !important; caret-color: transparent !important; }
         .stSelectbox [data-baseweb="select"],
-        .stSelectbox [data-baseweb="select"] *
-                                            { cursor: pointer !important; }
+        .stSelectbox [data-baseweb="select"] *,
         .stSelectbox div[data-baseweb="select"],
         .stSelectbox div[data-baseweb="select"] *,
         [data-baseweb="popover"] *,
-        [data-baseweb="menu"] *             { color: black !important; background-color: white !important; }
+        [data-baseweb="menu"] *             { cursor: pointer !important; color: black !important;
+                                              background-color: white !important; }
 
         /* ── Text input ── */
         .stTextInput input                  { color: #111111 !important; background-color: #ffffff !important; }
 
-        /* ── Plotly Play/Pause buttons — matching primaryColor ── */
+        /* ── Plotly Play/Pause buttons ── */
         .updatemenu-item-rect               { fill: #4a7fb5 !important; stroke: #4a7fb5 !important; stroke-width: 0 !important; }
         .updatemenu-item-text               { fill: #ffffff !important; font-weight: 700 !important;
                                               font-size: 12px !important; letter-spacing: 0.05em !important; }
         .updatemenu-item-rect:hover         { fill: #3a6a99 !important; stroke: #3a6a99 !important; }
         g.updatemenu rect.bg                { fill: transparent !important; stroke: none !important; }
 
-        /* ── Fixed-width action buttons (Run / New / Generate) ── */
+        /* ── Action buttons ── */
         [data-testid="stButton"] button     { width: fit-content !important; min-width: unset !important;
                                               max-width: unset !important; white-space: nowrap !important; }
 
