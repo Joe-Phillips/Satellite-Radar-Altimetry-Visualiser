@@ -25,6 +25,9 @@ st.markdown(
     <style>
         /* ── Global ── */
         [data-testid="stHeader"]            { display: none !important; }
+        [data-testid="collapsedControl"]    { display: none !important; }
+        button[kind="header"]               { display: none !important; }
+        [data-testid="stSidebarCollapseButton"] { display: none !important; }
         hr                                  { margin: 0.75rem 0 !important; }
         html, body,
         [data-testid="stAppViewContainer"],
@@ -334,7 +337,7 @@ def main():
     st.sidebar.title(":email: Contact")
     st.sidebar.info(
         """
-    Made by **Dr Joe Phillips**
+    Made by **Joe Phillips**
 
     [![GitHub](https://badgen.net/badge/icon/GitHub/green?icon=github&label)](https://github.com/Joe-Phillips) [![LinkedIn](https://badgen.net/badge/icon/linkedin/blue?icon=linkedin&label)](https://www.linkedin.com/in/joe-b-phillips/) j.phillips5@lancaster.ac.uk
 
@@ -342,6 +345,7 @@ def main():
     d.j.hardy@lancaster.ac.uk
         """
     )
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
     st.sidebar.image("lancs_logo.png")
     st.sidebar.image("cpom_logo.png")
 
@@ -374,7 +378,8 @@ def main():
         "altimeters and torches are very similar in that they both emit light (energy) - just the "
         "altimeter uses light at wavelengths too long for us to see (radio), and also times how long "
         "the light takes to bounce back! This type of light allows the satellites to see through the "
-        "atmosphere and even through weather such as clouds and rain. "
+        "atmosphere and even through weather such as clouds and rain, which other satellites carrying "
+        "cameras cannot do. "
         "Since these echoes (radio waves) travel at the speed of light (*299,792,458* meters per second!), "
         "the satellite can work out how far away the ground is below it. Even tiny differences in these "
         "timings can reveal detailed information about the shape of the surface below. By doing this "
@@ -650,7 +655,7 @@ def main():
             parts of the waveform. However, because the altimeter must wait for each echo to return before
             transmitting the next, the along-track sampling rate is limited to a low pulse repetition frequency
             (PRF, typically ~2 kHz), and kilometre-scale along-track resolution is typical. This conventional
-            approach is called **Low Resolution Mode** (LRM), and has been the standard for missions including
+            approach is called **Low Resolution Mode (LRM)**, and has been the standard for missions including
             ERS-1/2, Envisat, and CryoSat-2 over ice sheet interiors. This is what the 3D simulator approximates.
 
             **Synthetic Aperture Radar** (SAR) altimetry overcomes this along-track limitation by transmitting
@@ -677,7 +682,7 @@ def main():
             the precise range bin corresponding to the first surface return, which - combined with the
             reference range - gives the total range from satellite to surface. Various algorithms exist,
             from physical models fitting theoretical waveform shapes to empirical approaches based on waveform
-            geometry. **Slope correction** then determines where on the surface that range should be
+            geometry. **Slope correction** then determines *where on the surface* that range should be
             attributed to, since POCA is rarely directly below the satellite over sloping terrain, and
             typically relies on an auxiliary digital elevation model. Together, these steps reduce the full
             waveform to a single point elevation estimate. Slope correction is the dominant source of error
@@ -687,13 +692,13 @@ def main():
             **Surface tracking**
 
             Before any of this can happen, the satellite's onboard system must position the range window
-            correctly - a process called **surface tracking**. Two broad approaches exist: **closed-loop**
-            tracking, where the window is continuously updated based on the most recently received echo,
-            and **open-loop** tracking, where it is driven by a pre-loaded elevation model rather than live
+            correctly - a process called **surface tracking**. Two broad approaches exist: *closed-loop
+            tracking*, where the window is continuously updated based on the most recently received echo,
+            and *open-loop tracking*, where it is driven by a pre-loaded elevation model rather than live
             feedback. Open-loop tracking is more robust over complex terrain, where steep or rapidly changing
             topography means the previous echo is often a poor predictor of the next. Over flat, predictable
             terrain closed-loop tracking works well, but over rough or steeply sloping ground either approach
-            can struggle, causing **track loss** where echoes fall outside the range window and no measurement
+            can struggle, causing *loss of track* where echoes fall outside the range window and no measurement
             is recorded. For this reason, data coverage commonly degrades over complex terrain such as the
             margins of ice sheets.
 
@@ -701,8 +706,8 @@ def main():
 
             CryoSat-2 carries a second antenna, offset in the across-track direction. By comparing the phase
             of the signal received at each antenna - a technique called **interferometry** - it is possible to
-            measure the angle of arrival of the echo, resolving where across-track the POCA return came
-            from and bypassing slope correction entirely. Taking this further, **swath processing** uses phase
+            measure the angle of arrival of the echo, resolving *where across-track* the POCA return came
+            from and bypassing slope correction entirely. Taking this further, *swath processing* uses phase
             information throughout the waveform, not just at the leading edge, to recover elevations from
             across the whole illuminated footprint, producing dense grids of elevation measurements from a
             single pass. Neither simulator here uses interferometric information; both are based on power
@@ -820,6 +825,4 @@ def main():
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":
-
     main()
-
