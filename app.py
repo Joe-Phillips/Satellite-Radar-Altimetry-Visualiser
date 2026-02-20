@@ -360,6 +360,7 @@ def main():
         """
     )
     st.sidebar.markdown("<br>", unsafe_allow_html=True)
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
     st.sidebar.image("lancs_logo.png")
     st.sidebar.image("cpom_logo.png")
 
