@@ -5,7 +5,7 @@ Access it [here](https://satellite-radar-altimetry-visualiser.streamlit.app/)!
 
 ---
 
-Made by **Dr Joe Phillips**  
+Made by **Joe Phillips**  
 
 [![GitHub](https://badgen.net/badge/icon/GitHub/green?icon=github&label)](https://github.com/Joe-Phillips)
 [![LinkedIn](https://badgen.net/badge/icon/linkedin/blue?icon=linkedin&label)](https://www.linkedin.com/in/joe-b-phillips/)
