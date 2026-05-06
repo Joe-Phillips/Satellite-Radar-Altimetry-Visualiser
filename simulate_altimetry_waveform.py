@@ -1,59 +1,10 @@
 #----------------------------------------------------------------------
-# Overview
-#----------------------------------------------------------------------
-
-"""
-This script simulates radar altimetry waveforms from input topography
-using a simplified geometric ray-casting approach.
-
-The simulator works by casting rays from a satellite position down to
-a surface defined by the input topography. Each ray finds its first
-intersection with the surface, and the slant range of that intersection
-is mapped to a waveform bin. Contributions are weighted by an antenna
-gain pattern and accumulated to form the output waveform.
-
-Two modes are provided:
-  - 2D (SAR-analogous):  Rays are cast across a 1D cross-track profile,
-                         collapsing the along-track dimension. This is
-                         loosely analogous to SAR mode, where the
-                         along-track footprint is Doppler-compressed,
-                         but the comparison is approximate.
-  - 3D (LRM-analogous):  Rays are cast across a 2D circular footprint
-                         on a hexagonal grid. This is loosely analogous
-                         to LRM, where the full beam-limited footprint
-                         is illuminated. Again, the comparison is
-                         approximate.
-
-The 2D case produces reasonable waveform shapes and performs fairly
-well for the purposes of this simulator. The 3D case inherits the same
-geometric simplifications, but any limitations are compounded by the
-extra spatial dimension. Most notably, the simulated waveform exhibits
-a sharper drop in return power after the peak than would be seen in a
-real LRM waveform, which typically has a longer and more gradual
-trailing tail. This issue is present in the 2D case too but is much
-less apparent there.
-
-This is a geometric simulator only. It does not model:
-  - Scattering behaviour based on surface type or roughness
-    (e.g. subsurface or volume scattering, speckle)
-  - Mode-specific instrument properties (LRM, SAR, SARIn, etc.)
-  - Any aspect of on-board or ground processing
-
-The waveform shape is determined entirely by surface geometry and the
-antenna gain taper. The output is normalised to a maximum of 1.
-"""
-
-
-#----------------------------------------------------------------------
 # Imports
 #----------------------------------------------------------------------
 
 import numpy as np
 from scipy.interpolate import interp1d, RegularGridInterpolator
 from scipy.optimize import root_scalar
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import math
 
 
 #----------------------------------------------------------------------
@@ -64,8 +15,8 @@ def simulate_altimetry_waveform_2d(
     topography,
     range_window_height=239.8339664,
     sat_altitude=717000,
-    footprint_width=15000,
-    num_rays=512,
+    footprint_width=22500,
+    num_rays=1024,
     num_bins=128,
     return_contribution_angle_scale=False,
 ):
@@ -83,7 +34,7 @@ def simulate_altimetry_waveform_2d(
         sat_altitude (float): Satellite altitude in metres. Defaults to 717000
             (CryoSat-2).
         footprint_width (float): Across-track width of the simulated footprint
-            in metres. Defaults to 15000 (CryoSat-2).
+            in metres. Defaults to 22500 km (1.5x beam-footprint width of 15000) (CryoSat-2).
         num_rays (int): Number of rays to cast across the footprint. Defaults
             to 512.
         num_bins (int): Number of bins in the output waveform. Defaults to 128.
@@ -162,9 +113,10 @@ def simulate_altimetry_waveform_2d(
     # Accumulate bin contributions weighted by antenna gain
     #----------------------------------------------------------------------
 
-    return_bins = np.clip(np.array(return_bins, dtype="int"), 0, num_bins - 1)
+    return_bins = np.array(return_bins, dtype=int)
     return_contributions = np.zeros((num_rays, num_bins))
-    return_contributions[np.arange(num_rays), return_bins] = 1
+    valid = (return_bins >= 0) & (return_bins < num_bins)
+    return_contributions[np.arange(num_rays)[valid], return_bins[valid]] = 1
 
     # Scale contributions by off-nadir antenna gain pattern
     # See https://www.sciencedirect.com/science/article/pii/S0273117705009348 Eq. 1
@@ -194,7 +146,7 @@ def simulate_altimetry_waveform_2d(
 # 3D Simulation (LRM-analogous)
 #----------------------------------------------------------------------
 
-def get_range_window_bottom_3d(num_rays, footprint_radius, range_window_height, sat_altitude):
+def get_range_window_bottom_3d(num_rays, footprint_radius, sat_altitude):
     """Simulates a 3D radar altimetry waveform from a given topography grid.
 
     Models pulse returns from a satellite altimeter by casting rays across a
@@ -331,8 +283,8 @@ def simulate_altimetry_waveform_3d(
     topography,
     range_window_height=239.8339664,
     sat_altitude=717000,
-    footprint_radius=7500,
-    num_rays=2048,
+    footprint_radius=11250,
+    num_rays=4096,
     num_bins=128,
     return_contribution_angle_scale=False,
 ):
@@ -395,7 +347,7 @@ def simulate_altimetry_waveform_3d(
     topography_interpolator = RegularGridInterpolator((x, y), topography, bounds_error=False, method="slinear")
 
     # Compute the curved base of the range window on a hexagonal grid within the footprint
-    range_window_bottom, _ = get_range_window_bottom_3d(num_rays, footprint_radius, range_window_height, sat_altitude)
+    range_window_bottom, _ = get_range_window_bottom_3d(num_rays, footprint_radius, sat_altitude)
     num_rays = len(range_window_bottom)  # update after hexagonal packing
 
     #----------------------------------------------------------------------
@@ -423,9 +375,13 @@ def simulate_altimetry_waveform_3d(
     # Accumulate bin contributions weighted by antenna gain
     #----------------------------------------------------------------------
 
-    return_bins = np.clip(np.array(return_bins, dtype="int"), 0, num_bins - 1)
+    # return_bins = np.clip(np.array(return_bins, dtype="int"), 0, num_bins - 1)
+    # return_contributions = np.zeros((num_rays, num_bins))
+    # return_contributions[np.arange(num_rays), return_bins] = 1
+    return_bins = np.array(return_bins, dtype=int)
     return_contributions = np.zeros((num_rays, num_bins))
-    return_contributions[np.arange(num_rays), return_bins] = 1
+    valid = (return_bins >= 0) & (return_bins < num_bins)
+    return_contributions[np.arange(num_rays)[valid], return_bins[valid]] = 1
 
     # Scale contributions by off-nadir antenna gain pattern
     # See https://www.sciencedirect.com/science/article/pii/S0273117705009348 Eq. 1
